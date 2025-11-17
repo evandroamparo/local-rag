@@ -5,3 +5,5 @@ beautifulsoup4
 markdown
 requests # For interacting with Ollama's API
 pydantic # For the dataclass structure
+openai
+tiktoken
