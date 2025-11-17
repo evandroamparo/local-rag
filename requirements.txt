@@ -1,0 +1,7 @@
+faiss-cpu
+numpy
+PyPDF2
+beautifulsoup4
+markdown
+requests # For interacting with Ollama's API
+pydantic # For the dataclass structure

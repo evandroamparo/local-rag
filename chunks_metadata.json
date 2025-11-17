@@ -1,0 +1,247 @@
+[
+    {
+        "text": "FLoRA: Fused forward-backward adapters for parameter efficient\nfine-tuning and reducing inference-time latencies of LLMs\nDhananjaya Gowda\u2217Seoha Song\u2217Junhyun Lee Harshith Goka\nSamsung Research\nAbstract\nAs the large language models (LLMs) grow in\nsize each day, efficient training and fine-tuning\nhas never been as important as nowadays. This\nresulted in the great interest in parameter effi-\ncient fine-tuning (PEFT), and effective meth-\nods including low-rank adapters (LoRA) has\nemerged. Although the various PEFT meth-\nods have been studied extensively in the recent\nyears, the greater part of the subject remains\nunexplored with the huge degree of freedom.\nIn this paper, we propose FLoRA, a family\nof fused forward-backward adapters (FFBA)\nfor parameter-efficient fine-tuning of LLMs on\ndownstream tasks. The FFBA combine ideas\nfrom the popular LoRA and parallel adapters\nto improve the overall fine-tuning accuracies.",
+        "source": "FLoRA.pdf",
+        "page_number": 1
+    },
+    {
+        "text": "m tasks. The FFBA combine ideas\nfrom the popular LoRA and parallel adapters\nto improve the overall fine-tuning accuracies.\nAt the same time, latencies are minimized by\nfusing the forward and backward adapters into\nexisting projection layers of the base model.\nExperimental results show that the proposed\nFFB adapters perform significantly better than\nthe popularly used LoRA in both accuracy and\nlatency for a similar parameter budget.\n1 Introduction\nLarge language models (LLMs) have revolution-\nized the world of artificial intelligence with down-\nstream applications in almost all possible domains\nthat humans can imagine (OpenAI and et.al., 2023).\nWith an ever-growing demand to accommodate\nmore domains and newer tasks, and with pro-\nhibitively high retraining or full fine-tuning (FFT)\ncosts, parameter-efficient fine-tuning (PEFT) (Man-\ngrulkar et al., 2022) of LLMs using adapters has\nbecome the most commonly used approach to add\nmore capabilities to existing LLMs (Houlsby et al.,\n2019a).",
+        "source": "FLoRA.pdf",
+        "page_number": 1
+    },
+    {
+        "text": "arameter-efficient fine-tuning (PEFT) (Man-\ngrulkar et al., 2022) of LLMs using adapters has\nbecome the most commonly used approach to add\nmore capabilities to existing LLMs (Houlsby et al.,\n2019a). Also, the performance of LLMs fine-tuned\non individual tasks with separate adapters is of-\nten better than that of a generalized LLM that can\nhandle multiple tasks.\n\u2217Equal contribution.LLM adapters can be broadly classified into\nprompt or prefix fine-tuning, serial adapters, and\nparallel adapters (Hu et al., 2023). Among the dif-\nferent types of adapters proposed in the literature,\nlow-rank adapters (LoRA) and their variants are\nwidely used to fine-tune LLMs (Hu et al., 2022; Li\nand Liang, 2021a; Hu et al., 2023). Serial adapters\nhave been one of the earliest adapters used in the\nliterature of neural networks in several domains, in-\ncluding natural language processing (Rebuffi et al.,\n2017; Houlsby et al., 2019a).",
+        "source": "FLoRA.pdf",
+        "page_number": 1
+    },
+    {
+        "text": "neural networks in several domains, in-\ncluding natural language processing (Rebuffi et al.,\n2017; Houlsby et al., 2019a). However, one main\ndisadvantage of the serial adapters is the sequential\nnature of these adapter computations, which cannot\nbe easily parallelized along with the base model\ncomputations, leading to significant latency over-\nheads as compared to using only the base models.\nLow-rank adapters (LoRA), which have become\nmore popular in recent times, are a type of parallel\nadapters that are attached in parallel to any linear\nprojection rather than at block or higher levels. The\npopularity of LoRA and it\u2019s variants stem from\ntheir simplicity and ability to merge them back into\nthe base model easily. Prompt or prefix fine-tuning\nis an alternative way to adapt LLMs to new tasks\nwith minimal compute overhead, but are generally\nseen to underperform serial or parallel adapters (Hu\net al., 2023).",
+        "source": "FLoRA.pdf",
+        "page_number": 1
+    },
+    {
+        "text": "with minimal compute overhead, but are generally\nseen to underperform serial or parallel adapters (Hu\net al., 2023).\nLoRA adapters provide an efficient way to fine-\ntune an LLM to new domains/tasks by freezing the\nbase model and updating only a small set of adapter\nparameters using a small domain or task-specific\ndataset (Mao et al., 2024). These adapters can be\nattached to any linear projection layer and can be\neasily merged into the base model after fine-tuning\nbut before deployment, there by saving on the ad-\nditional compute that may introduce non-trivial\nlatency during inference. However, merging these\none or more domain-specific adapters into the base\nmodel can deteriorate the performance of the LLM\non tasks that it was already good at. One option is\nto merge and de-merge these adapters into the base\n1arXiv:2511.00050v1  [cs.LG]  28 Oct 2025",
+        "source": "FLoRA.pdf",
+        "page_number": 1
+    },
+    {
+        "text": "ers into the base\n1arXiv:2511.00050v1  [cs.LG]  28 Oct 2025",
+        "source": "FLoRA.pdf",
+        "page_number": 1
+    },
+    {
+        "text": "model, however, this can introduce significant over-\nheads. In view of this, it has become a common\npractice to deploy a common base LLM model with\ndifferent domain/task specific adapters that can be\nswitched based on needs. Invoking these adapter\ncomputations as separate calls to the GPU kernel\noperations introduces significant additional laten-\ncies (20-50%) disproportionate to the insignificant\nadditional computations (1-5%) required in terms\nof FLOPs.\nOne way of countering this is to fuse these\nadapter parameters to the base model and deploy\nthem as one single operation instead of two. In this\npaper, we propose a new family of fused forward-\nbackward adapters that build on the advantages\nof the existing pool of adapters that provides im-\nproved latencies as well as better accuracies on\ndown-stream tasks for a given parameter budget.",
+        "source": "FLoRA.pdf",
+        "page_number": 2
+    },
+    {
+        "text": "\ndown-stream tasks for a given parameter budget.\nThe main contributions of this paper are as follows:\n\u2022A new family of fused adapters referred to as\nfused forward-backward adapters (FFBA) or\nfused low-rank adapters (FLoRA) is proposed\nthat help reduce inference time latencies when\nusing LLM adapters.\n\u2022The proposed fused adapters reduce the time\nper output token (TPOT) overhead of LoRA\nadapters by 21-30% for 1B models and 31-\n48% for 3B models.\n\u2022The proposed fused adapters perform signif-\nicantly better than LoRA on summary and\ndialogue tasks, while they are on par or\nmarginally better than LoRA on common-\nsense and math reasoning tasks.\n2 Related Work\nIt is now a common practice to prepare a founda-\ntion LLM and fine-tune it for downstream tasks.\nFFT became more and more challenging as the\nfoundation model grew in size and parameters, and\nvarious PEFT methods have been investigated.",
+        "source": "FLoRA.pdf",
+        "page_number": 2
+    },
+    {
+        "text": "\nfoundation model grew in size and parameters, and\nvarious PEFT methods have been investigated.\nLow-rank adapters (LoRA), currently the most\ncommonly used PEFT method, was first introduced\nin Hu et al. (2022) based on the hypothesis that\nweight updates during a downstream task fine-\ntuning have a low \"intrinsic rank.\" It freezes the\noriginal weight Wand only updates the low-rank\nweight difference \u2206W , where the low-rank is en-\nsured with the decomposition of \u2206W=AB . (to\nbe explained in detail in Section 3) The low-rank\nvalue, r, is the key hyperparameter of LoRA. Withthe great success of LoRA, many derivative works\nwhich improve on various aspects of the LoRA\nhave been published. A comprehensive summary\nof LoRA and its variants is provided in the survey\npaper, Mao et al. (2024).\nHere, we introduce an inexhaustive list of LoRA\nvariants. A set of works modify the training\nscheme, for example, using different learning rates\nforAandBmatrices (Hayou et al.",
+        "source": "FLoRA.pdf",
+        "page_number": 2
+    },
+    {
+        "text": "ntroduce an inexhaustive list of LoRA\nvariants. A set of works modify the training\nscheme, for example, using different learning rates\nforAandBmatrices (Hayou et al., 2024), adding\nresidual connections during training and merge dur-\ning inference (Shi et al., 2024), or freezing the A\nmatrix and training only Bmatrix to reduce the\nmemory footprint of training (Zhang et al., 2023b).\nThere are another group of studies which concen-\ntrate on the low-rank value optimization, such as\ndynamical rank allocation utilizing SVD of up-\ndates (Zhang et al., 2023c), adaptive parameter\naddition (Zhang et al., 2023a), and using gating\ntechniques during training based on importance\nand only keep the most important ranks in the\nend (Ding et al., 2023). Meng et al. (2025) op-\ntimizes the initialization of LoRA matrices, using\nprincipal components of the original weight matrix\nto initialize AandBand use the residual weight\nas the frozen weight.",
+        "source": "FLoRA.pdf",
+        "page_number": 2
+    },
+    {
+        "text": "RA matrices, using\nprincipal components of the original weight matrix\nto initialize AandBand use the residual weight\nas the frozen weight.\nWhile these works aim to optimize the LoRA\u2019s\nperformance, they all preserve the basic structure\nof LoRA. We instead investigate on modifying the\nstructure of LoRA itself. This is because our main\nmotivation is to suggest an efficient adapter which\ncan maximize the parallelization of GPUs.\nParallel adapters (He et al., 2022) are modules\nconnected to either or both the attention or feed-\nforawrd network (FFN) blocks. As the name sug-\ngests, parallel adapters are linked in parallel in the\ngraph, that is, the input is shared with the atten-\ntion (FFN) block and the output is added to that of\nthe attention (FFN). Typically the adapter consists\nof a feed-forward down projection, nonlinearity,\nand a feed-forward up projection. Hu et al.",
+        "source": "FLoRA.pdf",
+        "page_number": 2
+    },
+    {
+        "text": "ard down projection, nonlinearity,\nand a feed-forward up projection. Hu et al. (2023)\nthoroughly investigates the parallel adapter and\nconcludes that in optimal settings its performance\nmatches with LoRA of similar parameter budget.\nIn this paper, we do no rely on a single type of\nadapter. Rather, we build upon the parallel adapters\u2019\nexpressive power and use it to complement LoRA.\nFirst, we modify LoRA with the intension of effi-\ncient inference and less latency, with the possibility\nof performance drop. Then we minimally apply\nthe parallel adapter to counterbalance the loss in\nperformance. Details of the overall strategy will\nfollow in the next section.\n2",
+        "source": "FLoRA.pdf",
+        "page_number": 2
+    },
+    {
+        "text": "Figure 1: Block schematic of the proposed fused\nforward-backward adapter. The blue blocks denote the\nbase model, orange blocks denote the forward adapters,\nand the green blocks denote the backward adapter.\nPEFT includes other methods such as prefix or\nprompt-tuning (Li and Liang, 2021b; Lester et al.,\n2021; Liu et al., 2022), where task-dependent learn-\nable embeddings are appended at the beginning of\nthe context. Series adapters (Houlsby et al., 2019b;\nPfeiffer et al., 2020) serially insert additional train-\nable modules to the \u2018attention \u2212FFN\u2019 sequence in a\nlayer. Survey papers (Xu et al., 2023; Balne et al.,\n2024) are available for comprehensive list of PEFT\nmethods.\n3 Fused LLM Adapters\nConventional LoRA uses low-rank approximation\n(LRA) in order to process information efficiently\nin a typically large hidden input dimension.",
+        "source": "FLoRA.pdf",
+        "page_number": 3
+    },
+    {
+        "text": " typically large hidden input dimension. For\ninstance, the output of a linear projection layer\nwith weights W\u2208Rdo\u00d7diand LoRA adaptersA\u2208Rr\u00d7d i,B\u2208Rdo\u00d7r, for an input X\u2208Rdi\u00d7L\nis given by\nZ=WX+BAX(1)\nwhere dianddoare the input and output dimen-\nsions, Lis the input sequence length, and r(\u226ad i\nanddo) is the rank of the LRA of the adapter weight\nmatrix \u2206W=BA . From now on, we refer to\ntheAandBmatrices as forward and backward\nadapters, respectively.\nPartially-fused LoRAIn a naive implementa-\ntion of LoRA, including the Huggingface PEFT li-\nbrary (Mangrulkar et al., 2022), the above computa-\ntion of a single LoRA is performed as a sequence of\n4 different operations, namely, WX ,AX,B(AX) ,\nandWX+BAX. It is often seen that the overall\nlatency incurred in executing these sequences of\noperations separately is much larger compared to\nthe total FLOPs that need to be computed.",
+        "source": "FLoRA.pdf",
+        "page_number": 3
+    },
+    {
+        "text": "ately is much larger compared to\nthe total FLOPs that need to be computed. In order\nto reduce the overall latency of this compute, and\nutilize the efficiency of GPUs in parallelization of\nlarge size matrix multiplications, the first two oper-\nations can be fused into one by concatenating the\nweight matrcis W and A into one. The resulting\ncomputations are given by\n\u0014Y\n\u2206Y\u0015\n=\u0014W\nA\u0015\nX=\u0014WX\nAX\u0015\n(2)\nwhere Y=WX and\u2206Y=AX . However, the\nother two operations \u2206Z=B\u2206Y andZ=Y+\n\u2206Zstill need to computed sequentially. We refer\nthis way of implementing LoRA may be be referred\nto as partially-fused LoRA (pf-LoRA).\nFused forward adapterOne way of further re-\nducing the overall latency is to eliminate the LRA\nframework and remove the backward projection,\nB. The saved parameter count can be added to the\nforward projection matrix Aby increasing the low-\nrank dimension from rto2r. This may be referred\nto as fused forward adapter (FFA). In this case, af-\nter calculating Eq.",
+        "source": "FLoRA.pdf",
+        "page_number": 3
+    },
+    {
+        "text": "ojection matrix Aby increasing the low-\nrank dimension from rto2r. This may be referred\nto as fused forward adapter (FFA). In this case, af-\nter calculating Eq. 2 we would need one additional\ncomputation Z=Y+Repeat(\u2206Y) in order to\ncombine the concatenated outputs obtained from\nbaseYand adapter \u2206Y weight matrices. The spe-\ncific operation used in the combination is a design\nchoice. In this manuscript, we use \u201crepeat and add,\u201d\nthat is, we repeat the \u2206Y vector do/2rtimes to\nmatch the dimensions of the two vectors and add\nthem.\n3",
+        "source": "FLoRA.pdf",
+        "page_number": 3
+    },
+    {
+        "text": "(a)\n (b)\nFigure 2: Linear projection layers with fused forward and backward adapters. (a) Fused forward layer (FFL), and\n(b) Fused forward-backward layer (FFBL).\nThis reduces the overall latency, however, with-\nout the LRA bottleneck the ability of the adapter\nmodule to effectively capture the additional infor-\nmation may reduce significantly during fine-tuning,\nas can be seen from experimental results later.\nFused forward-backward adapterIn order to\naddress this loss in performance or expressibility\nof the adapter module, we propose to fuse the back-\nward adapter matrix Binto another linear projec-\ntion matrix within the same block. In a multi-head\nattention (MHA) block, the backward adapters for\nthe query, key and value projections can be attached\nor fused into the output projection matrix. As a\nresult, all four projection layers within the MHA\nblock have a forward adapter, while only the out-\nput projection layer has both forward as well as\nseparate or shared backward adapters.",
+        "source": "FLoRA.pdf",
+        "page_number": 4
+    },
+    {
+        "text": "ix. As a\nresult, all four projection layers within the MHA\nblock have a forward adapter, while only the out-\nput projection layer has both forward as well as\nseparate or shared backward adapters. In a FFN\nblock, all projection layers have a forward adapter\nwhile only the down-projection layer has both for-\nward and backward adapters. The resulting block-\nschematic of the fused forward-backward adapter\n(FFBA) or fully-fused low-rank adapter (FLoRA)\nwithin a transformer layer/block is show in Fig. 1.\nThe resulting projection layers with fused adapters\nare shown in Fig. 2, and are referred to as fused\nforward layer (FFL) and fused forward-backward\nlayer (FFBL).\nThe motivation for fusing the forward and back-\nward projections of the adapter into different pro-\njection layers come from parallel adapters where\none single adapter per MHA or FFN block per-forms almost similar to LoRA with same parameter\ncount (Hu et al., 2023).",
+        "source": "FLoRA.pdf",
+        "page_number": 4
+    },
+    {
+        "text": " adapters where\none single adapter per MHA or FFN block per-forms almost similar to LoRA with same parameter\ncount (Hu et al., 2023). One thing that needs to be\nexplored is the importance of the non-linearity op-\neration used in parallel adapters at the bottleneck,\nand the placement of these forward and backward\nadapter projections. The resulting computations for\na layer with both forward and backward adapters\nattached is given by\nhY\n\u2206Yi\n=hW B\nA CihX\n\u2206Xi\n=hWX+B\u2206X\nAX+C\u2206Xi\n(3)\nThe shrink operation reduces the output dimen-\nsion from (d+r) output to the original hidden\nembedding dimension dof the base model. If\nwe remove the matrices AandCfrom the fused\nforward-backward layer it will become a purely\nfused-backward layer (FBL). This also helps in re-\nmoving the additional overhead of shrink (or repeat\nand add) operation.",
+        "source": "FLoRA.pdf",
+        "page_number": 4
+    },
+    {
+        "text": "r repeat\nand add) operation. The parameter count from A\ncan be added into B, however, the two operations\nare not equivalent and how they fare in terms of\nfine-tuning accuracies is a matter of investigation.\nAlso, it is to be noted that the FFBL or FBL needs\nan additional augmented input \u2206X, which comes\nfrom the augmented output \u2206Zof the FFLs. As\nshown in Fig. 1, the backward adapter fused into\nthe output projection layer in MHA block is shared\nby the 3 forward adapters fused onto the QKV pro-\njections. Similarly, the backward adapter fused into\nthe down-projection layer in FFN block is shared\nby the 2 forward adapters fused onto the up and\ngate projection layers. The augmented outputs of\n4",
+        "source": "FLoRA.pdf",
+        "page_number": 4
+    },
+    {
+        "text": "Commonsense Reasoning Tasks (Acc %)\nAdapter arcc arce boolq hella obqa piqa siqa wino Avg\nLlama3.2-1B-Inst\nBase 51.00 73.00 64.00 44.00 74.50 72.50 50.00 45.00 59.25\nFFT 59.60 75.40 81.70 73.40 84.60 78.50 73.00 71.70 74.73\nLoRA 58.50 74.00 81.50 71.50 85.50 75.00 72.00 73.50 73.93\nFFA 52.50 71.00 81.50 69.50 85.00 69.50 69.50 69.50 71.00\nFFBA (AorB) 57.00 77.00 81.00 72.00 83.00 72.50 73.50 68.50 73.06\nFFBA-Relu (AorB) 56.00 76.50 81.50 72.50 84.00 72.00 73.50 70.50 73.31\nFFBA (QG-Add) 62.10 76.00 79.90 73.40 84.60 77.70 71.70 68.90 74.28\nLlama3.2-3B-Inst\nBase 79.00 83.00 83.00 68.00 83.00 72.50 68.50 54.00 73.87\nFFT 74.50 85.00 91.50 78.50 93.50 81.00 79.50 84.00 85.68\nLoRA 78.00 86.00 90.00 84.00 93.00 86.50 84.00 84.00 84.93\nFFA 76.00 84.50 85.00 78.00 88.50 76.00 78.50 77.50 80.50\nFFBA (AorB) 81.00 89.50 89.00 85.00 94.00 78.50 78.00 82.00 85.50\nFFBA-Relu (AorB) 80.00 88.50 91.00 85.50 94.00 83.00 82.00 80.00 83.43\nFFBA (QG-Add) 77.60 86.60 88.00 85.40 92.20 83.70 78.70 83.10 84.",
+        "source": "FLoRA.pdf",
+        "page_number": 5
+    },
+    {
+        "text": "A (AorB) 81.00 89.50 89.00 85.00 94.00 78.50 78.00 82.00 85.50\nFFBA-Relu (AorB) 80.00 88.50 91.00 85.50 94.00 83.00 82.00 80.00 83.43\nFFBA (QG-Add) 77.60 86.60 88.00 85.40 92.20 83.70 78.70 83.10 84.41\nTable 1: Performance of different adapters on commonsense reasoning tasks.\nthe FFLs are added together before feeding them\nas augmented input to the FBLs.\n4 Experiments and results\nDetails of the experimental setup, datasets used,\nand the results are presented in this section.\n4.1 Datasets\nThe performance of the proposed fused forward-\nbackward adapters is evaluated on 3 different cat-\negory of tasks, namely, commonsense reasoning,\narithmetic reasoning and summary-dialogue gen-\neration. For commonsense and arithmetic rea-\nsoning tasks, we use the Commonsense170K and\nMath10K training datasets used in (Hu et al.,\n2023). For summary-dialogue tasks we use a com-\nbination of training sets from 4 different tasks,\nnamely, CNN-DailyMail, Xsum (Nallapati et al.,\n2016), DailyDialogue (Li et al.",
+        "source": "FLoRA.pdf",
+        "page_number": 5
+    },
+    {
+        "text": " used in (Hu et al.,\n2023). For summary-dialogue tasks we use a com-\nbination of training sets from 4 different tasks,\nnamely, CNN-DailyMail, Xsum (Nallapati et al.,\n2016), DailyDialogue (Li et al., 2017), and Multi-\nWoz (Budzianowski et al., 2018). In order to speed\nup evaluations, all test sets in the commonsense\nreasoning tasks were limited to a maximum of top\n1000 examples, to a maximum of top 500 examples\nfor summary and dialogue tasks, and all examples\nof the math reasoning tasks.\n4.2 Experimental setup\nAll experiments in this paper are conducted us-\ning the publicly available Llama3.2 family of\nLLM models (Dubey et al., 2024; Meta-AI, 2024).The instruction fine-tuned variants of the mod-\nels, namely, Llama3.2-1B-Inst and Llama3.2-3B-\nInst are used. The performance of the proposed\nFFBA adapters is compared against the popular\nLoRA adapters.",
+        "source": "FLoRA.pdf",
+        "page_number": 5
+    },
+    {
+        "text": "BA adapters is compared against the popular\nLoRA adapters. All adapters were fine-tuned for\n10 epochs separately for each of the 3 category\nof tasks on a single node of 8 H100 GPUs with a\nglobal batch size of 1M tokens. Seven different\nlearning rates (LR) from 1e\u22126 to1e\u22123 at equal\nintervals were explored for each of the adapters,\nwith a constant LR scheduling. The adapter check-\npoints are saved at the end of each epoch and the\nbest performing checkpoint on a validation set is\nused for final evaluation. The validation set is cre-\nated using 500 randomized examples held-out from\nthe training set. All fine-tuning experiments and\nevaluations were conducted using our custom im-\nplementation of adapters on top of HuggingFace\ntransformers.\n4.3 Results\nThe performance of the proposed LLM adapters\non 3 important category of downstream tasks is\npresented in this section. A comparison against the\nbase model, full fine-tuning (FFT) and LoRA is\nprovided.\n4.3.",
+        "source": "FLoRA.pdf",
+        "page_number": 5
+    },
+    {
+        "text": "\non 3 important category of downstream tasks is\npresented in this section. A comparison against the\nbase model, full fine-tuning (FFT) and LoRA is\nprovided.\n4.3.1 Commonsense reasoning\nThe performance of different adapters for the\nLlama3.2-1B-Inst and Llama3.2-3B-Inst models\n5",
+        "source": "FLoRA.pdf",
+        "page_number": 5
+    },
+    {
+        "text": "Arithmetic Reasoning Tasks (Acc %)\nAdapter addsub aqua arith gsm8k singeq svamp Avg\nLlama3.2-1B-Inst\nBase 68.10 22.83 62.17 45.49 80.91 53.20 55.45\nFFT 85.32 22.83 96.17 48.52 90.94 66.70 68.41\nLoRA 82.78 24.80 94.33 45.87 89.76 64.50 67.00\nFFA 81.77 20.08 85.17 36.24 84.84 58.60 61.11\nFFBA (AorB) 87.85 23.62 94.33 43.21 89.17 64.00 67.15\nFFBA-Relu (AorB) 87.85 25.98 96.00 36.62 92.52 55.90 65.81\nFFBA (QG-Add) 84.30 23.62 93.83 45.87 89.76 65.40 67.13\nFFBA (FPA) 83.04 25.20 94.00 45.64 89.37 61.90 66.52\nFFBA (FPA-Relu) 85.82 26.77 93.17 43.75 90.35 57.90 66.29\nLlama3.2-3B-Inst\nBase 91.14 24.80 93.17 76.88 93.90 87.60 77.91\nFFT 90.13 25.20 98.67 65.66 92.72 79.00 75.23\nLoRA 93.16 27.17 96.67 67.10 95.87 82.50 77.07\nFFA 87.59 21.26 96.00 66.87 92.13 80.30 74.02\nFFBA 92.41 25.59 95.33 73.31 92.52 85.20 77.39\nFFBA-Relu 93.11 25.61 95.10 72.31 91.52 85.00 77.10\nFFBA (QG-Add) 90.13 33.86 97.33 69.45 94.88 80.00 77.60\nTable 2: Performance of different adapters on arithmetic reasoning tasks.",
+        "source": "FLoRA.pdf",
+        "page_number": 6
+    },
+    {
+        "text": "2.52 85.20 77.39\nFFBA-Relu 93.11 25.61 95.10 72.31 91.52 85.00 77.10\nFFBA (QG-Add) 90.13 33.86 97.33 69.45 94.88 80.00 77.60\nTable 2: Performance of different adapters on arithmetic reasoning tasks.\non the popular commonsense reasoning tasks when\nfine-tuned using different adapters is given in Ta-\nble 1. As can be seen from the results, full fine-\ntuning (FFT) of the models perform the best as\ncompared to fine-tuning using adapters. The pro-\nposed FFBA adapters performs almost similar or\nbetter than the popular LoRA adapters and come\nclosest to full fine-tuning.\nFFBA (AorB) denotes a variant of the FFBA ar-\nchitecture shown in Fig. 1, where the query, key and\nvalue projections have only the forward adapter ( A)\nwhile the output and down projections have only\nthe backward adapter ( B). Removing the forward\nadapter from a layer helps avoid the need for the\nrepeat and add operation and thereby help reduce\nthe latency marginally.",
+        "source": "FLoRA.pdf",
+        "page_number": 6
+    },
+    {
+        "text": "ving the forward\nadapter from a layer helps avoid the need for the\nrepeat and add operation and thereby help reduce\nthe latency marginally. FFBA (QG-Add) denotes\nanother variant where the adapter component AX\nat the output of the fused-projection is added back\ninto the base model component WX only for the\nquery and gate projection layers, thereby eliminat-\ning the repeat and add ops on key, value and down\nprojection layers. Removing all repeat and add op-\nerations would be a good idea from latency point\nof view, but that would result in no task specific\nadditional learning to the attention and gating com-\nputations. In view of this, we propose to retain\nonly the repeat and add ops for the query and down\nprojection layers. It can be seen that this FFBA(QG-Add) variant provides the best results.\nIt can also be seen that the benefit of adding\na non-linearity (FFBA-Relu) in between the for-\nward and backward projections of the adapter is\nnot very tangible.",
+        "source": "FLoRA.pdf",
+        "page_number": 6
+    },
+    {
+        "text": "lts.\nIt can also be seen that the benefit of adding\na non-linearity (FFBA-Relu) in between the for-\nward and backward projections of the adapter is\nnot very tangible. On the contrary, it appears to\nunder-perform the other adapters without any non-\nlinearity which is a bit surprising and needs further\ninvestigation. It can also be seen that the fused\nforward adapter (FFA) with only the forward down-\nprojections ( AX) performs worse, signifying the\nimportance of the LRA constraint that helps in\nsearching for a sparse solution in a larger dimen-\nsion space.\n4.3.2 Math reasoning\nThe performance of the adapters for the two\nLlama3.2 models on arithmetic reasoning tasks\nis given in Table 2. A similar trend follows, as\nwas seen in the case of commonsense reasoning\nevaluations. The proposed FFBA adapter performs\nsimilar or better than LoRA and closest to FFT,\nwhile the FFA under-performs all other adapters.\nHowever, it was seen that the Llama3.",
+        "source": "FLoRA.pdf",
+        "page_number": 6
+    },
+    {
+        "text": "apter performs\nsimilar or better than LoRA and closest to FFT,\nwhile the FFA under-performs all other adapters.\nHowever, it was seen that the Llama3.2-3B base\nmodel performance for the math reasoning tasks\ngsm8k and svamp are already the best and none of\nthe adapters including full-finetuning can improve\nupon the base model. One possibility is that the\ninstruction fine-tuned model is likely to be trained\n6",
+        "source": "FLoRA.pdf",
+        "page_number": 6
+    },
+    {
+        "text": "Summary/Dialogue Tasks (R Lsum )\nAdapter cnndm dd woz xsum Avg\nLlama3.2-1B-Inst\nBase 25.28 13.03 13.81 19.49 17.90\nFFT 28.37 16.58 30.45 32.67 27.01\nLoRA 25.06 15.06 28.27 27.27 23.91\nFFA 25.05 14.93 24.53 24.38 22.22\nFFBA (AorB) 26.62 16.70 30.32 30.82 26.11\nFFBA-Relu (AorB) 27.09 15.57 26.66 28.65 24.49\nFFBA (QG-Add) 26.24 19.67 29.65 29.38 26.23\nLlama3.2-3B-Inst\nBase 25.10 14.45 16.68 20.54 19.19\nFFT 29.23 25.85 29.66 37.63 30.59\nLora 27.44 19.81 29.62 32.34 27.30\nFFA 26.04 18.45 28.67 31.85 26.25\nFFBA (AorB) 28.10 19.88 31.50 34.64 28.53\nFFBA-Relu (AorB) 28.11 19.20 30.12 33.14 27.64\nFFBA (QG-Add) 28.71 20.39 30.87 35.72 28.92\nTable 3: Performance of different adapters on summary/dialogue tasks.\nwith several math reasoning instruction data, and\nthe Math10K fine-tuning training set used in this\npaper is not adding any additional diversity or in-\nformation.\nThe rows FPA and FPA-Relu denote a variant\nof FFBA adapters where the repeat and add op is\nremoved completely from all layers.",
+        "source": "FLoRA.pdf",
+        "page_number": 7
+    },
+    {
+        "text": " in this\npaper is not adding any additional diversity or in-\nformation.\nThe rows FPA and FPA-Relu denote a variant\nof FFBA adapters where the repeat and add op is\nremoved completely from all layers. The result-\ning adapter architecture (with or without the non-\nlinearity) would be exactly same as the parallel-\nadapter outlined in (Hu et al., 2023), and can be\ntermed as fused parallel adapter (FPA). It can be\nseen that this FPA performs comparable to other\nadapters but marginally worse than other FFBA or\nLoRA adapters. However, the FPA adapters pro-\nvide one of the best latencies (as discussed in the\nnext section) and can be a good alternative for la-\ntency critical applications. Experiments with these\nFPA variants were carried out only for arithmetic\nreasoning tasks for illustration, and were not car-\nried out for other tasks.\n4.3.",
+        "source": "FLoRA.pdf",
+        "page_number": 7
+    },
+    {
+        "text": "ere not car-\nried out for other tasks.\n4.3.3 Summary and dialogue generation\nSummary and dialogue generation is an important\ndownstream application of LLMs, and the perfor-\nmance of various adapters on this category of tasks\nis shown in Table 3. It can be seen from the re-\nsults that the proposed FFBA adapters (AorB and\nQG-Add) perform significantly better than the con-\nventional LoRA fine-tuning, and are the closest to\nfull fine-tuning results.5 Analysis\nA comparison and discussion on the inference time\nlatencies of different fused adapters as compared\nto the base model and the popular LoRA adapters\nis provided in this section.\n5.1 Latency of fused adapters\nThe time-to-first-token (TTFT) and time-per-\noutput-token (TPOT) latencies of different adapters\nas compared to the base model is shown in Table 4.\nThe latencies are computed for Llama3.2 1B and\n3B models over a common subset of 200 examples\nfrom the CNN-DailyMail evaluation set.",
+        "source": "FLoRA.pdf",
+        "page_number": 7
+    },
+    {
+        "text": "wn in Table 4.\nThe latencies are computed for Llama3.2 1B and\n3B models over a common subset of 200 examples\nfrom the CNN-DailyMail evaluation set. The la-\ntencies are computed by repeating each forward\npass through the entire model two times for each\ndecoded token and recording the time taken for\nthe second pass. The latencies are measured on a\nNvidia H100 gpu with 80GB memory at full pre-\ncision. It can be seen from the table that inferenc-\ning using the off-the-shelf generalized PEFT-LoRA\nframework is optimized and shows relatively higher\nlatency numbers. In view of this, we evaluate all\nadapters using our custom implementation of all\nadapters without any unnecessary generalization\noverheads that may be required by PEFT-LoRA.\nIt can be seen from the table that fused adapters\n(FFBA-AorB and FFBA-QG-Add) reduce the\nTPOT overhead of LoRA (35% wrt base model)\nby around 7-8% for the 1B model and 7-11% for\n3B models. Equivalently, they reduce the LoRA\n7",
+        "source": "FLoRA.pdf",
+        "page_number": 7
+    },
+    {
+        "text": "and FFBA-QG-Add) reduce the\nTPOT overhead of LoRA (35% wrt base model)\nby around 7-8% for the 1B model and 7-11% for\n3B models. Equivalently, they reduce the LoRA\n7",
+        "source": "FLoRA.pdf",
+        "page_number": 7
+    },
+    {
+        "text": "Llama3.2-1B-Inst Llama3.2-3B-Inst\nAdapter #Param TTFT TPOT %\u2191 #Param TTFT TPOT %\u2191\nBase - 11.9 6.6 - - 25.5 11.7 -\nPEFT-LoRA 22.5M 17.2 11.7 77 48.6M 33.4 19.4 65\nLoRA 22.5M 15.5 8.935 48.6M 31.9 15.230\nFused Adapters\npf-LoRA 22.5M 15.3 8.3 26 48.6M 32.3 13.8 18\nFFA 23M 15.1 7.9 20 51.8M 30.6 13.2 13\nFFBA (A&B) 21M 15.2 9.1 38 55M 31.9 15.0 28\nFFBA (AorB) 21M 15.2 8.4 28 55M 30.9 14.1 20\nFFBA-Relu (AorB) 21M 15.3 8.9 35 55M 31.0 14.9 27\nFFBA (FPA, No-Add) 21M 14.3 7.7 16.6 55M 29.6 12.7 9\nFFBA (QG-Add) 21M 14.7 8.224.2 55M 30.5 13.515\nTable 4: Inference latencies (in ms) for different adapters (rank r= 32 ) computed on an Nvidia H100 GPU using a\ncommon subset of 200 examples from the cnndm dataset. The percentage increase (% \u2191) in TPOT over the base\nmodel is also shown.\nTPOT overhead by 21-30% (1B) and 31-48% (3B)\nrelatively.",
+        "source": "FLoRA.pdf",
+        "page_number": 8
+    },
+    {
+        "text": "30% (1B) and 31-48% (3B)\nrelatively. FFBA (AorB) and FFBA (A&B) in the\ntable refers to the special case of FFBA where only\nthe backward adapters or both forward and back-\nward adapters are used alongside output- and down-\nprojections in MHA and FFN blocks, respectively.\nAs can be seen from the latency figures using both\nforward and backward adapters increases the over-\nhead due to the need for an extra repeat and add\n(shrink) operation. Also, based on initial exper-\niments conducted using FFBA-FB which did not\nshow any better performance compared to FFBA-B,\nall experiments reported in the previous section are\nfor the FFBA-B variant. Also, using a non-linearity\n(FFBA-Relu) when using FFBA-B style adapters\nalso increases the latency considerably.\n6 Conclusions\nIn this paper, we proposed a family of fused\nadapters, FLoRA, which allows us to optimize the\nway adapter compute is handled at inference time.",
+        "source": "FLoRA.pdf",
+        "page_number": 8
+    },
+    {
+        "text": "mily of fused\nadapters, FLoRA, which allows us to optimize the\nway adapter compute is handled at inference time.\nThe main idea is to fuse the smaller adapter pro-\njections into the adjacent large projection layers\nwhenever possible. This reduces the number of\nindependent or sequential operations and there by\nreducing the GPU inefficiency in handling smaller\nmatrix multiplications. This results in reducing the\nLoRA TPOT latency overhead by around 21-30%\nrelatively for 1B models, and 31-48% for 3B mod-\nels. In terms of performance, the FFB adapters\nare comparable or marginally better than LoRA for\ncommonsense and math reasoning tasks. However,\nthey show significant improvement over LoRA forsummary and dialogue tasks.\n7 Limitations\nWe recognize the following limitations of our work.\nThe comparison of our proposed fused adapters is\nlimited only to the popularly used LoRA adapters,\nand 3 different category of tasks.",
+        "source": "FLoRA.pdf",
+        "page_number": 8
+    },
+    {
+        "text": "rison of our proposed fused adapters is\nlimited only to the popularly used LoRA adapters,\nand 3 different category of tasks. A more exhaus-\ntive comparison against other adapters such as pre-\nfix adapters, and more downstream tasks can be\npart of future scope. The experiments and down-\nstream applications considered in this paper are\nrestricted to one language (English), one modality\n(text) and can be extended to other languages and\nmodalities. The experiments are limited to small or\nmoderately sized LLMs that could be candidates\nfor ondevice deployment. Experiments with huge\ncloud based LLMs is not within the scope of this\nstudy. The latency measurements in this paper are\nmade on a H100 GPU using full precision. Mea-\nsurements on different GPUs and NPUs (for onde-\nvice deployment of LLMs) at different precisions,\nas well as studying the effect of different quantiza-\ntion methods on these adapter accuracies are part\nof our future scope.",
+        "source": "FLoRA.pdf",
+        "page_number": 8
+    },
+    {
+        "text": " at different precisions,\nas well as studying the effect of different quantiza-\ntion methods on these adapter accuracies are part\nof our future scope. The role and significance of\ndifferent types of non-linearity within the adapter\narchitecture is not fully explored. In order to speed\nup evaluations, all test sets in the commonsense\nreasoning tasks were limited to a maximum of top\n1000 examples, to a maximum of top 500 examples\nfor summary and dialogue tasks, and all examples\nof the math reasoning tasks. We believe this is a\nfair number to compare different methods. Results\non the full evaluation sets will be provided in the\n8",
+        "source": "FLoRA.pdf",
+        "page_number": 8
+    },
+    {
+        "text": "future versions, either as part of the main paper or\nas appendix.\nReferences\nCharith Chandra Sai Balne, Sreyoshi Bhaduri, Ta-\nmoghna Roy, Vinija Jain, and Aman Chadha. 2024.\nParameter efficient fine tuning: A comprehen-\nsive analysis across applications.arXiv preprint\narXiv:2404.13506.\nPawe\u0142 Budzianowski, Tsung-Hsien Wen, Bo-Hsiang\nTseng, I\u00f1igo Casanueva, Ultes Stefan, Ramadan Os-\nman, and Milica Ga\u0161i \u00b4c. 2018. Multiwoz - a large-\nscale multi-domain wizard-of-oz dataset for task-\noriented dialogue modelling. InProceedings of the\n2018 Conference on Empirical Methods in Natural\nLanguage Processing (EMNLP).\nNing Ding, Xingtai Lv, Qiaosen Wang, Yulin Chen,\nBowen Zhou, Zhiyuan Liu, and Maosong Sun. 2023.\nSparse low-rank adaptation of pre-trained language\nmodels.arXiv preprint arXiv:2311.11696.\nAbhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey,\nAbhishek Kadian, Ahmad Al-Dahle, Aiesha Letman,\nAkhil Mathur, Alan Schelten, Amy Yang, Angela\nFan, et al. 2024. The llama 3 herd of models.",
+        "source": "FLoRA.pdf",
+        "page_number": 9
+    },
+    {
+        "text": "Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey,\nAbhishek Kadian, Ahmad Al-Dahle, Aiesha Letman,\nAkhil Mathur, Alan Schelten, Amy Yang, Angela\nFan, et al. 2024. The llama 3 herd of models.arXiv\npreprint arXiv:2407.21783.\nSoufiane Hayou, Nikhil Ghosh, and Bin Yu. 2024.\nLora+: Efficient low rank adaptation of large models.\narXiv preprint arXiv:2402.12354.\nJunxian He, Chunting Zhou, Xuezhe Ma, Taylor Berg-\nKirkpatrick, and Graham Neubig. 2022. Towards a\nunified view of parameter-efficient transfer learning.\nInInternational Conference on Learning Representa-\ntions.\nNeil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski,\nBruna Morrone, Quentin de Laroussilhe, Andrea\nGesmundo, Mona Attariyan, and Sylvain Gelly.\n2019a. Parameter-efficient transfer learning for nlp.\nPreprint, arXiv:1902.00751.\nNeil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski,\nBruna Morrone, Quentin De Laroussilhe, Andrea\nGesmundo, Mona Attariyan, and Sylvain Gelly.\n2019b. Parameter-efficient transfer learning for nlp.",
+        "source": "FLoRA.pdf",
+        "page_number": 9
+    },
+    {
+        "text": "oulsby, Andrei Giurgiu, Stanislaw Jastrzebski,\nBruna Morrone, Quentin De Laroussilhe, Andrea\nGesmundo, Mona Attariyan, and Sylvain Gelly.\n2019b. Parameter-efficient transfer learning for nlp.\nInInternational conference on machine learning,\npages 2790\u20132799. PMLR.\nEdward J Hu, Yelong Shen, Phillip Wallis, Zeyuan\nAllen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and\nWeizhu Chen. 2022. LoRA: Low-rank adaptation of\nlarge language models. InInternational Conference\non Learning Representations.\nZhiqiang Hu, Lei Wang, Yihuai Lan, Wanyu Xu, Ee-\nPeng Lim, Lidong Bing, Xing Xu, Soujanya Poria,and Roy Lee. 2023. LLM-adapters: An adapter fam-\nily for parameter-efficient fine-tuning of large lan-\nguage models. InProceedings of the 2023 Confer-\nence on Empirical Methods in Natural Language Pro-\ncessing, pages 5254\u20135276, Singapore. Association\nfor Computational Linguistics.\nBrian Lester, Rami Al-Rfou, and Noah Constant. 2021.\nThe power of scale for parameter-efficient prompt\ntuning.",
+        "source": "FLoRA.pdf",
+        "page_number": 9
+    },
+    {
+        "text": "5254\u20135276, Singapore. Association\nfor Computational Linguistics.\nBrian Lester, Rami Al-Rfou, and Noah Constant. 2021.\nThe power of scale for parameter-efficient prompt\ntuning. InProceedings of the 2021 Conference on\nEmpirical Methods in Natural Language Processing,\npages 3045\u20133059.\nXiang Lisa Li and Percy Liang. 2021a. Prefix-tuning:\nOptimizing continuous prompts for generation. In\nProceedings of the 59th Annual Meeting of the Asso-\nciation for Computational Linguistics and the 11th\nInternational Joint Conference on Natural Language\nProcessing (Volume 1: Long Papers). Association for\nComputational Linguistics.\nXiang Lisa Li and Percy Liang. 2021b. Prefix-tuning:\nOptimizing continuous prompts for generation. In\nProceedings of the 59th Annual Meeting of the Asso-\nciation for Computational Linguistics and the 11th\nInternational Joint Conference on Natural Language\nProcessing (Volume 1: Long Papers), pages 4582\u2013\n4597.\nYanran Li, Hui Su, Xiaoyu Shen, Wenjie Li, Ziqiang\nCao, and Shuzi Niu.",
+        "source": "FLoRA.pdf",
+        "page_number": 9
+    },
+    {
+        "text": "nguistics and the 11th\nInternational Joint Conference on Natural Language\nProcessing (Volume 1: Long Papers), pages 4582\u2013\n4597.\nYanran Li, Hui Su, Xiaoyu Shen, Wenjie Li, Ziqiang\nCao, and Shuzi Niu. 2017. Dailydialog: A manually\nlabelled multi-turn dialogue dataset. InProceedings\nof The 8th International Joint Conference on Natural\nLanguage Processing (IJCNLP 2017).\nXiao Liu, Kaixuan Ji, Yicheng Fu, Weng Tam, Zhengx-\niao Du, Zhilin Yang, and Jie Tang. 2022. P-tuning:\nPrompt tuning can be comparable to fine-tuning\nacross scales and tasks. InProceedings of the 60th\nAnnual Meeting of the Association for Computational\nLinguistics (Volume 2: Short Papers), pages 61\u201368.\nSourab Mangrulkar, Sylvain Gugger, Lysandre Debut,\nYounes Belkada, Sayak Paul, and B Bossan. 2022.\nPeft: State-of-the-art parameter-efficient fine-tuning\nmethods.URL: https://github. com/huggingface/peft.\nYuren Mao, Yuhang Ge, Yijiang Fan, Wenyi Xu, Yu Mi,\nZhonghao Hu, and Yunjun Gao. 2024.",
+        "source": "FLoRA.pdf",
+        "page_number": 9
+    },
+    {
+        "text": "eter-efficient fine-tuning\nmethods.URL: https://github. com/huggingface/peft.\nYuren Mao, Yuhang Ge, Yijiang Fan, Wenyi Xu, Yu Mi,\nZhonghao Hu, and Yunjun Gao. 2024. A survey on\nlora of large language models.Frontiers of Computer\nScience, 19(7).\nFanxu Meng, Zhaohui Wang, and Muhan Zhang. 2025.\nPissa: Principal singular values and singular vectors\nadaptation of large language models.Advances in\nNeural Information Processing Systems, 37:121038\u2013\n121072.\nMeta-AI. 2024. Llama 3.2: Revolutionizing edge\nAI and vision with open, customizable mod-\nels \u2014 ai.meta.com. https://ai.meta.com/blog/\nllama-3-2-connect-2024-vision-edge-mobile-devices/ .\n[Accessed 16-02-2025].\n9",
+        "source": "FLoRA.pdf",
+        "page_number": 9
+    },
+    {
+        "text": "Ramesh Nallapati, Bowen Zhou, Cicero dos Santos,\n\u00c7a\u02d8glar Gu \u02d9l\u00e7ehre, and Bing Xiang. 2016. Abstrac-\ntive text summarization using sequence-to-sequence\nRNNs and beyond. InProceedings of the 20th\nSIGNLL Conference on Computational Natural Lan-\nguage Learning, pages 280\u2013290, Berlin, Germany.\nAssociation for Computational Linguistics.\nOpenAI and Josh Achiam et.al. 2023. Gpt-4 technical\nreport.Preprint, arXiv:2303.08774.\nJonas Pfeiffer, Ivan Vuli \u00b4c, Iryna Gurevych, and Se-\nbastian Ruder. 2020. Mad-x: An adapter-based\nframework for multi-task cross-lingual transfer. In\nProceedings of the 2020 Conference on Empirical\nMethods in Natural Language Processing (EMNLP),\npages 7654\u20137673.\nSylvestre-Alvise Rebuffi, Hakan Bilen, and Andrea\nVedaldi. 2017. Learning multiple visual domains\nwith residual adapters.Preprint, arXiv:1705.08045.\nShuhua Shi, Shaohan Huang, Minghui Song, Zhoujun\nLi, Zihan Zhang, Haizhen Huang, Furu Wei, Weiwei\nDeng, Feng Sun, and Qi Zhang. 2024.",
+        "source": "FLoRA.pdf",
+        "page_number": 10
+    },
+    {
+        "text": "ters.Preprint, arXiv:1705.08045.\nShuhua Shi, Shaohan Huang, Minghui Song, Zhoujun\nLi, Zihan Zhang, Haizhen Huang, Furu Wei, Weiwei\nDeng, Feng Sun, and Qi Zhang. 2024. Reslora: Iden-\ntity residual mapping in low-rank adaption.arXiv\npreprint arXiv:2402.18039.\nLingling Xu, Haoran Xie, Si-Zhao Joe Qin, Xiaohui\nTao, and Fu Lee Wang. 2023. Parameter-efficient\nfine-tuning methods for pretrained language models:\nA critical review and assessment.arXiv preprint\narXiv:2312.12148.\nFeiyu Zhang, Liangzhi Li, Junhao Chen, Zhouqiang\nJiang, Bowen Wang, and Yiming Qian. 2023a. In-\ncrelora: Incremental parameter allocation method\nfor parameter-efficient fine-tuning.arXiv preprint\narXiv:2308.12043.\nLongteng Zhang, Lin Zhang, Shaohuai Shi, Xiaowen\nChu, and Bo Li. 2023b. Lora-fa: Memory-efficient\nlow-rank adaptation for large language models fine-\ntuning.arXiv preprint arXiv:2308.03303.\nQingru Zhang, Minshuo Chen, Alexander Bukharin,\nNikos Karampatziakis, Pengcheng He, Yu Cheng,\nWeizhu Chen, and Tuo Zhao.",
+        "source": "FLoRA.pdf",
+        "page_number": 10
+    },
+    {
+        "text": "ation for large language models fine-\ntuning.arXiv preprint arXiv:2308.03303.\nQingru Zhang, Minshuo Chen, Alexander Bukharin,\nNikos Karampatziakis, Pengcheng He, Yu Cheng,\nWeizhu Chen, and Tuo Zhao. 2023c. Adalora: Adap-\ntive budget allocation for parameter-efficient fine-\ntuning.arXiv preprint arXiv:2303.10512.\n10",
+        "source": "FLoRA.pdf",
+        "page_number": 10
+    }
+]
